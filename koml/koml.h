@@ -10,6 +10,7 @@ typedef enum KOMLType {
 } koml_type_enum;
 
 typedef struct KOMLSymbol {
+	char * name;
 	unsigned long long int stride;
 	koml_type_enum type;
 	union {
@@ -26,6 +27,8 @@ typedef struct KOMLTable {
 	unsigned long long int length;
 } koml_table_t;
 
+void koml_symbol_print(koml_symbol_t * symbol);
+void koml_table_print(koml_table_t * table);
 int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long int buffer_length);
 koml_symbol_t * koml_table_symbol(koml_table_t * table, char * name);
 int koml_table_destroy(koml_table_t * table);
