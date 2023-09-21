@@ -30,8 +30,6 @@ int main(int argc, char ** argv) {
 		}
 	}
 
-	printf("%s\n", buffer);
-
 	koml_table_t ktable;
 	int ret = koml_table_load(&ktable, buffer, length);
 	if (ret != 0) {
@@ -80,8 +78,10 @@ int main(int argc, char ** argv) {
 	unsigned char b = bptr->data.boolean;
 	int test = testptr->data.i32;
 
-	printf("a = %i; c = %i; f = %f; b = %u; test = %i\n", a, c, f, b, test);
-	printf("s = %s\n", str);
+	printf("table: ");
+	koml_table_print(&ktable);
+
+	koml_table_destroy(&ktable);
 
 	return 0;
 }
