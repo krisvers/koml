@@ -1,4 +1,4 @@
-CFLAGS=-O2 -march=native -pipe -Wall
+override CFLAGS+=-O2 -march=native -pipe -Wall
 
 main: koml/koml.o koml/koml.h
 
