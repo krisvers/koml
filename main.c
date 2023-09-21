@@ -78,6 +78,13 @@ int main(int argc, char ** argv) {
 	unsigned char b = bptr->data.boolean;
 	int test = testptr->data.i32;
 
+	(void) a;
+	(void) c;
+	(void) f;
+	(void) str;
+	(void) b;
+	(void) test;
+
 	printf("table: ");
 	koml_table_print(&ktable);
 
