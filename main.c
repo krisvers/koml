@@ -81,7 +81,7 @@ int main(int argc, char ** argv) {
 	int test = testptr->data.i32;
 
 	printf("a = %i; c = %i; f = %f; b = %u; test = %i\n", a, c, f, b, test);
-	printf("s = %s\n", sptr->data.string);
+	printf("s = %s\n", str);
 
 	return 0;
 }
