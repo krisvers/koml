@@ -109,6 +109,47 @@ static unsigned char wtotf(char * start, unsigned long long int length) {
 	return 0;
 }
 
+static char * koml_type_strings[] = {
+	"unknown",
+	"int",
+	"float",
+	"string",
+	"boolean",
+};
+
+void koml_symbol_print(koml_symbol_t * symbol) {
+	printf("%s (%s): ", symbol->name, koml_type_strings[symbol->type]);
+	switch (symbol->type) {
+		case KOML_TYPE_INT:
+			printf("%i", symbol->data.i32);
+			break;
+		case KOML_TYPE_FLOAT:
+			printf("%f", symbol->data.f32);
+			break;
+		case KOML_TYPE_STRING:
+			printf("%s", symbol->data.string);
+			break;
+		case KOML_TYPE_BOOLEAN:
+			printf("%s", (symbol->data.boolean) ? "true" : "false");
+			break;
+		case KOML_TYPE_UNKNOWN:
+		default:
+			printf("???");
+			break;
+	}
+}
+
+void koml_table_print(koml_table_t * table) {
+	puts("{");
+	for (unsigned long long int i = 0; i < table->length; ++i) {
+		putc(' ', stdout);
+		putc(' ', stdout);
+		koml_symbol_print(&table->symbols[i]);
+		putc('\n', stdout);
+	}
+	puts("}");
+}
+
 int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long int buffer_length) {
 	if (buffer == NULL || buffer_length == 0) {
 		return 1;
@@ -194,29 +235,36 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 
 				++word.length;
 				if (c == '=') {
-					char * tmp = NULL;
+					out_table->symbols[out_table->length - 1].name = NULL;
 					unsigned long long int tmp_length = 0;
 					if (section.start != NULL) {
 						tmp_length = word.length + section.length + 1;
-						tmp = malloc(tmp_length);
-						if (tmp == NULL || word.start == NULL || section.start == NULL) {
+						out_table->symbols[out_table->length - 1].name = malloc(tmp_length + 1);
+						if (out_table->symbols[out_table->length - 1].name == NULL || word.start == NULL || section.start == NULL) {
 							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
 							return 1;
 						}
 
-						memcpy(tmp, section.start, section.length);
-						tmp[section.length] = ':';
-						memcpy(&tmp[section.length + 1], word.start, word.length);
+						out_table->symbols[out_table->length - 1].name[tmp_length] = '\0';
+
+						memcpy(out_table->symbols[out_table->length - 1].name, section.start, section.length);
+						out_table->symbols[out_table->length - 1].name[section.length] = ':';
+						memcpy(&out_table->symbols[out_table->length - 1].name[section.length + 1], word.start, word.length);
 					} else {
-						tmp = word.start;
 						tmp_length = word.length;
+						out_table->symbols[out_table->length - 1].name = malloc(tmp_length + 1);
+						if (out_table->symbols[out_table->length - 1].name == NULL || word.start == NULL) {
+							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
+							return 1;
+						}
+						memcpy(out_table->symbols[out_table->length - 1].name, word.start, tmp_length);
 					}
-					if (tmp == NULL) {
+					if (out_table->symbols[out_table->length - 1].name == NULL) {
 						printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
 						return 1;
 					}
 
-					out_table->hashes[out_table->length - 1] = koml_internal_hash(tmp, tmp_length);
+					out_table->hashes[out_table->length - 1] = koml_internal_hash(out_table->symbols[out_table->length - 1].name, tmp_length);
 
 					word.start = NULL;
 					word.length = 0;
@@ -262,17 +310,36 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 
 				++word.length;
 				if (c == '=') {
-					char * tmp = malloc(word.length + section.length + 1);
-					if (tmp == NULL || word.start == NULL || section.start == NULL) {
+					out_table->symbols[out_table->length - 1].name = NULL;
+					unsigned long long int tmp_length = 0;
+					if (section.start != NULL) {
+						tmp_length = word.length + section.length + 1;
+						out_table->symbols[out_table->length - 1].name = malloc(tmp_length + 1);
+						if (out_table->symbols[out_table->length - 1].name == NULL || word.start == NULL || section.start == NULL) {
+							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
+							return 1;
+						}
+
+						out_table->symbols[out_table->length - 1].name[tmp_length] = '\0';
+
+						memcpy(out_table->symbols[out_table->length - 1].name, section.start, section.length);
+						out_table->symbols[out_table->length - 1].name[section.length] = ':';
+						memcpy(&out_table->symbols[out_table->length - 1].name[section.length + 1], word.start, word.length);
+					} else {
+						tmp_length = word.length;
+						out_table->symbols[out_table->length - 1].name = malloc(tmp_length + 1);
+						if (out_table->symbols[out_table->length - 1].name == NULL || word.start == NULL) {
+							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
+							return 1;
+						}
+						memcpy(out_table->symbols[out_table->length - 1].name, word.start, tmp_length);
+					}
+					if (out_table->symbols[out_table->length - 1].name == NULL) {
 						printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
 						return 1;
 					}
 
-					memcpy(tmp, section.start, section.length);
-					tmp[section.length] = ':';
-					memcpy(&tmp[section.length + 1], word.start, word.length);
-
-					out_table->hashes[out_table->length - 1] = koml_internal_hash(tmp, word.length + section.length + 1);
+					out_table->hashes[out_table->length - 1] = koml_internal_hash(out_table->symbols[out_table->length - 1].name, tmp_length);
 
 					word.start = NULL;
 					word.length = 0;
@@ -318,17 +385,36 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 
 				++word.length;
 				if (c == '=') {
-					char * tmp = malloc(word.length + section.length + 1);
-					if (tmp == NULL || word.start == NULL || section.start == NULL) {
+					out_table->symbols[out_table->length - 1].name = NULL;
+					unsigned long long int tmp_length = 0;
+					if (section.start != NULL) {
+						tmp_length = word.length + section.length + 1;
+						out_table->symbols[out_table->length - 1].name = malloc(tmp_length + 1);
+						if (out_table->symbols[out_table->length - 1].name == NULL || word.start == NULL || section.start == NULL) {
+							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
+							return 1;
+						}
+
+						out_table->symbols[out_table->length - 1].name[tmp_length] = '\0';
+
+						memcpy(out_table->symbols[out_table->length - 1].name, section.start, section.length);
+						out_table->symbols[out_table->length - 1].name[section.length] = ':';
+						memcpy(&out_table->symbols[out_table->length - 1].name[section.length + 1], word.start, word.length);
+					} else {
+						tmp_length = word.length;
+						out_table->symbols[out_table->length - 1].name = malloc(tmp_length + 1);
+						if (out_table->symbols[out_table->length - 1].name == NULL || word.start == NULL) {
+							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
+							return 1;
+						}
+						memcpy(out_table->symbols[out_table->length - 1].name, word.start, tmp_length);
+					}
+					if (out_table->symbols[out_table->length - 1].name == NULL) {
 						printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
 						return 1;
 					}
 
-					memcpy(tmp, section.start, section.length);
-					tmp[section.length] = ':';
-					memcpy(&tmp[section.length + 1], word.start, word.length);
-
-					out_table->hashes[out_table->length - 1] = koml_internal_hash(tmp, word.length + section.length + 1);
+					out_table->hashes[out_table->length - 1] = koml_internal_hash(out_table->symbols[out_table->length - 1].name, tmp_length);
 
 					word.start = NULL;
 					word.length = 0;
@@ -395,17 +481,36 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 
 				++word.length;
 				if (c == '=') {
-					char * tmp = malloc(word.length + section.length + 1);
-					if (tmp == NULL || word.start == NULL || section.start == NULL) {
-						printf("Invalid boolean value (%llu:%llu)\n", line + 1, column + 1);
+					out_table->symbols[out_table->length - 1].name = NULL;
+					unsigned long long int tmp_length = 0;
+					if (section.start != NULL) {
+						tmp_length = word.length + section.length + 1;
+						out_table->symbols[out_table->length - 1].name = malloc(tmp_length + 1);
+						if (out_table->symbols[out_table->length - 1].name == NULL || word.start == NULL || section.start == NULL) {
+							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
+							return 1;
+						}
+
+						out_table->symbols[out_table->length - 1].name[tmp_length] = '\0';
+
+						memcpy(out_table->symbols[out_table->length - 1].name, section.start, section.length);
+						out_table->symbols[out_table->length - 1].name[section.length] = ':';
+						memcpy(&out_table->symbols[out_table->length - 1].name[section.length + 1], word.start, word.length);
+					} else {
+						tmp_length = word.length;
+						out_table->symbols[out_table->length - 1].name = malloc(tmp_length + 1);
+						if (out_table->symbols[out_table->length - 1].name == NULL || word.start == NULL) {
+							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
+							return 1;
+						}
+						memcpy(out_table->symbols[out_table->length - 1].name, word.start, tmp_length);
+					}
+					if (out_table->symbols[out_table->length - 1].name == NULL) {
+						printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
 						return 1;
 					}
 
-					memcpy(tmp, section.start, section.length);
-					tmp[section.length] = ':';
-					memcpy(&tmp[section.length + 1], word.start, word.length);
-
-					out_table->hashes[out_table->length - 1] = koml_internal_hash(tmp, word.length + section.length + 1);
+					out_table->hashes[out_table->length - 1] = koml_internal_hash(out_table->symbols[out_table->length - 1].name, tmp_length);
 
 					word.start = NULL;
 					word.length = 0;
