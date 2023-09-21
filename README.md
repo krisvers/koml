@@ -2,7 +2,7 @@
 krisvers' (not so) obvious markup language parser.
 
 ### example usage (in C):
-```toml
+```koml
 [section]
 i integer = 9451;
   [section.sub]
