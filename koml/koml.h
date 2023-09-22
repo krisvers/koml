@@ -7,7 +7,21 @@ typedef enum KOMLType {
 	KOML_TYPE_FLOAT = 2,
 	KOML_TYPE_STRING = 3,
 	KOML_TYPE_BOOLEAN = 4,
+	KOML_TYPE_ARRAY = 5,
 } koml_type_enum;
+
+typedef struct KOMLArray {
+	unsigned long long int length;
+	unsigned long long int * strides;
+	union {
+		int * i32;
+		float * f32;
+		char ** string;
+		unsigned char * boolean;
+		void * voidptr;
+	} elements;
+	koml_type_enum type;
+} koml_array_t;
 
 typedef struct KOMLSymbol {
 	char * name;
@@ -18,6 +32,7 @@ typedef struct KOMLSymbol {
 		float f32;
 		char * string;
 		unsigned char boolean;
+		koml_array_t array;
 	} data;
 } koml_symbol_t;
 

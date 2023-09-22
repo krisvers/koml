@@ -1,4 +1,5 @@
 itest=4;
+aiarray=1,2,3,4;
 
 [section]
 ia=2;

@@ -39,6 +39,47 @@ static int koml_table_alloc_new(koml_table_t * table) {
 	return 0;
 }
 
+static int koml_array_alloc_new(koml_array_t * array) {
+	++array->length;
+	if (array->strides == NULL) {
+			array->strides = malloc(array->length * sizeof(unsigned long long int));
+	} else {
+		array->strides = realloc(array->strides, array->length * sizeof(unsigned long long int));
+	}
+
+	if (array->strides == NULL) {
+		return 1;
+	}
+
+	unsigned long long int stride = 0;
+	switch (array->type) {
+		case KOML_TYPE_INT:
+		case KOML_TYPE_FLOAT:
+			stride = 4;
+			break;
+		case KOML_TYPE_STRING:
+			stride = sizeof(char *);
+			break;
+		case KOML_TYPE_BOOLEAN:
+			stride = 1;
+			break;
+		default:
+			return 3;
+	}
+
+	if (array->elements.voidptr == NULL) {
+		array->elements.voidptr = malloc(array->length * stride);
+	} else {
+		array->elements.voidptr = realloc(array->elements.voidptr, array->length * stride);
+	}
+
+	if (array->elements.voidptr == NULL) {
+		return 2;
+	}
+
+	return 0;
+}
+
 static char is_whitespace(char c) {
 	if (c == '\t' || c == '\r' || c == '\n' || c == ' ') {
 		return 1;
@@ -127,7 +168,7 @@ void koml_symbol_print(koml_symbol_t * symbol) {
 			printf("%f", symbol->data.f32);
 			break;
 		case KOML_TYPE_STRING:
-			printf("%s", symbol->data.string);
+			printf("\"%s\"", symbol->data.string);
 			break;
 		case KOML_TYPE_BOOLEAN:
 			printf("%s", (symbol->data.boolean) ? "true" : "false");
@@ -149,6 +190,28 @@ void koml_table_print(koml_table_t * table) {
 	}
 	puts("}");
 }
+
+typedef enum KOMLParserStateEnum {
+	KOML_PARSER_STATE_NONE = 0,
+	KOML_PARSER_STATE_SECTION_WAIT,
+	KOML_PARSER_STATE_SECTION_NAME,
+	KOML_PARSER_STATE_INTEGER_WAIT,
+	KOML_PARSER_STATE_INTEGER_NAME,
+	KOML_PARSER_STATE_INTEGER_VALUE,
+	KOML_PARSER_STATE_FLOAT_WAIT,
+	KOML_PARSER_STATE_FLOAT_NAME,
+	KOML_PARSER_STATE_FLOAT_VALUE,
+	KOML_PARSER_STATE_STRING_WAIT,
+	KOML_PARSER_STATE_STRING_NAME,
+	KOML_PARSER_STATE_STRING_VALUE,
+	KOML_PARSER_STATE_BOOLEAN_WAIT,
+	KOML_PARSER_STATE_BOOLEAN_NAME,
+	KOML_PARSER_STATE_BOOLEAN_VALUE,
+	KOML_PARSER_STATE_ARRAY_TYPE_WAIT,
+	KOML_PARSER_STATE_ARRAY_WAIT,
+	KOML_PARSER_STATE_ARRAY_NAME,
+	KOML_PARSER_STATE_ARRAY_VALUE,
+} koml_parser_state_enum;
 
 int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long int buffer_length) {
 	if (buffer == NULL || buffer_length == 0) {
@@ -179,7 +242,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 
 	char c = 127;
 
-	int status = 0;
+	koml_parser_state_enum state = KOML_PARSER_STATE_NONE;
 	unsigned long long int line = 0;
 	unsigned long long int column = 0;
 
@@ -205,30 +268,30 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 			column = 0;
 		}
 
-		switch (status) {
-			case 1:
+		switch (state) {
+			case KOML_PARSER_STATE_SECTION_WAIT:
 				word.start = &buffer[i];
 				word.length = 0;
-				status = 2;
+				state = KOML_PARSER_STATE_SECTION_NAME;
 				continue;
-			case 2:
+			case KOML_PARSER_STATE_SECTION_NAME:
 				++word.length;
 				if (c == ']') {
-					status = 0;
+					state = KOML_PARSER_STATE_NONE;
 					section.start = word.start;
 					section.length = word.length;
 				}
 				continue;
-			case 3:
+			case KOML_PARSER_STATE_INTEGER_WAIT:
 				if (is_whitespace(c)) {
 					continue;
 				}
 
 				word.start = &buffer[i];
 				word.length = 0;
-				status = 4;
+				state = KOML_PARSER_STATE_INTEGER_NAME;
 				continue;
-			case 4:
+			case KOML_PARSER_STATE_INTEGER_NAME:
 				if (is_whitespace(c)) {
 					continue;
 				}
@@ -257,6 +320,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
 							return 1;
 						}
+						out_table->symbols[out_table->length - 1].name[tmp_length] = '\0';
 						memcpy(out_table->symbols[out_table->length - 1].name, word.start, tmp_length);
 					}
 					if (out_table->symbols[out_table->length - 1].name == NULL) {
@@ -269,10 +333,10 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					word.start = NULL;
 					word.length = 0;
 					word.hash = 0;
-					status = 5;
+					state = KOML_PARSER_STATE_INTEGER_VALUE;
 				}
 				continue;
-			case 5:
+			case KOML_PARSER_STATE_INTEGER_VALUE:
 				if (is_whitespace(c)) {
 					continue;
 				}
@@ -284,7 +348,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					word.start = NULL;
 					word.length = 0;
 					word.hash = 0;
-					status = 0;
+					state = KOML_PARSER_STATE_NONE;
 					continue;
 				}
 
@@ -294,16 +358,16 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 				}
 				++word.length;
 				continue;
-			case 6:
+			case KOML_PARSER_STATE_FLOAT_WAIT:
 				if (is_whitespace(c)) {
 					continue;
 				}
 
 				word.start = &buffer[i];
 				word.length = 0;
-				status = 7;
+				state = KOML_PARSER_STATE_FLOAT_NAME;
 				continue;
-			case 7:
+			case KOML_PARSER_STATE_FLOAT_NAME:
 				if (is_whitespace(c)) {
 					continue;
 				}
@@ -332,6 +396,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
 							return 1;
 						}
+						out_table->symbols[out_table->length - 1].name[tmp_length] = '\0';
 						memcpy(out_table->symbols[out_table->length - 1].name, word.start, tmp_length);
 					}
 					if (out_table->symbols[out_table->length - 1].name == NULL) {
@@ -344,10 +409,10 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					word.start = NULL;
 					word.length = 0;
 					word.hash = 0;
-					status = 8;
+					state = KOML_PARSER_STATE_FLOAT_VALUE;
 				}
 				continue;
-			case 8:
+			case KOML_PARSER_STATE_FLOAT_VALUE:
 				if (is_whitespace(c)) {
 					continue;
 				}
@@ -359,7 +424,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					word.start = NULL;
 					word.length = 0;
 					word.hash = 0;
-					status = 0;
+					state = KOML_PARSER_STATE_NONE;
 					continue;
 				}
 
@@ -369,16 +434,16 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 				}
 				++word.length;
 				continue;
-			case 9:
+			case KOML_PARSER_STATE_STRING_WAIT:
 				if (is_whitespace(c)) {
 					continue;
 				}
 
 				word.start = &buffer[i];
 				word.length = 0;
-				status = 10;
+				state = KOML_PARSER_STATE_STRING_NAME;
 				continue;
-			case 10:
+			case KOML_PARSER_STATE_STRING_NAME:
 				if (is_whitespace(c)) {
 					continue;
 				}
@@ -407,6 +472,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
 							return 1;
 						}
+						out_table->symbols[out_table->length - 1].name[tmp_length] = '\0';
 						memcpy(out_table->symbols[out_table->length - 1].name, word.start, tmp_length);
 					}
 					if (out_table->symbols[out_table->length - 1].name == NULL) {
@@ -419,10 +485,10 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					word.start = NULL;
 					word.length = 0;
 					word.hash = 0;
-					status = 11;
+					state = KOML_PARSER_STATE_STRING_VALUE;
 				}
 				continue;
-			case 11:
+			case KOML_PARSER_STATE_STRING_VALUE:
 				if (is_whitespace(c)) {
 					continue;
 				}
@@ -457,7 +523,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					word.start = NULL;
 					word.length = 0;
 					word.hash = 0;
-					status = 0;
+					state = KOML_PARSER_STATE_NONE;
 					continue;
 				}
 
@@ -465,16 +531,16 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					++word.length;
 				}
 				continue;
-			case 12:
+			case KOML_PARSER_STATE_BOOLEAN_WAIT:
 				if (is_whitespace(c)) {
 					continue;
 				}
 
 				word.start = &buffer[i];
 				word.length = 0;
-				status = 13;
+				state = KOML_PARSER_STATE_BOOLEAN_NAME;
 				continue;
-			case 13:
+			case KOML_PARSER_STATE_BOOLEAN_NAME:
 				if (is_whitespace(c)) {
 					continue;
 				}
@@ -503,6 +569,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
 							return 1;
 						}
+						out_table->symbols[out_table->length - 1].name[tmp_length] = '\0';
 						memcpy(out_table->symbols[out_table->length - 1].name, word.start, tmp_length);
 					}
 					if (out_table->symbols[out_table->length - 1].name == NULL) {
@@ -515,10 +582,10 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					word.start = NULL;
 					word.length = 0;
 					word.hash = 0;
-					status = 14;
+					state = KOML_PARSER_STATE_BOOLEAN_VALUE;
 				}
 				continue;
-			case 14:
+			case KOML_PARSER_STATE_BOOLEAN_VALUE:
 				if (is_whitespace(c)) {
 					continue;
 				}
@@ -534,7 +601,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					word.start = NULL;
 					word.length = 0;
 					word.hash = 0;
-					status = 0;
+					state = KOML_PARSER_STATE_NONE;
 					continue;
 				}
 
@@ -543,6 +610,134 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					word.length = 0;
 				}
 				++word.length;
+				continue;
+			case KOML_PARSER_STATE_ARRAY_TYPE_WAIT:
+				if (is_whitespace(c)) {
+					continue;
+				}
+				if (c == 'i') {
+					out_table->symbols[out_table->length - 1].data.array.length = 0;
+					out_table->symbols[out_table->length - 1].data.array.type = KOML_TYPE_INT;
+					state = KOML_PARSER_STATE_ARRAY_WAIT;
+				}
+				if (c == 'f') {
+					out_table->symbols[out_table->length - 1].data.array.length = 0;
+					out_table->symbols[out_table->length - 1].data.array.type = KOML_TYPE_FLOAT;
+					state = KOML_PARSER_STATE_ARRAY_WAIT;
+				}
+				if (c == 's') {
+					out_table->symbols[out_table->length - 1].data.array.length = 0;
+					out_table->symbols[out_table->length - 1].data.array.type = KOML_TYPE_STRING;
+					state = KOML_PARSER_STATE_ARRAY_WAIT;
+				}
+				if (c == 'b') {
+					out_table->symbols[out_table->length - 1].data.array.length = 0;
+					out_table->symbols[out_table->length - 1].data.array.type = KOML_TYPE_BOOLEAN;
+					state = KOML_PARSER_STATE_ARRAY_WAIT;
+				}
+				continue;
+			case KOML_PARSER_STATE_ARRAY_WAIT:
+				if (is_whitespace(c)) {
+					continue;
+				}
+
+				word.start = &buffer[i];
+				word.length = 0;
+				state = KOML_PARSER_STATE_ARRAY_NAME;
+				continue;
+			case KOML_PARSER_STATE_ARRAY_NAME:
+				if (is_whitespace(c)) {
+					continue;
+				}
+
+				++word.length;
+				if (c == '=') {
+					out_table->symbols[out_table->length - 1].name = NULL;
+					unsigned long long int tmp_length = 0;
+					if (section.start != NULL) {
+						tmp_length = word.length + section.length + 1;
+						out_table->symbols[out_table->length - 1].name = malloc(tmp_length + 1);
+						if (out_table->symbols[out_table->length - 1].name == NULL || word.start == NULL || section.start == NULL) {
+							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
+							return 1;
+						}
+
+						out_table->symbols[out_table->length - 1].name[tmp_length] = '\0';
+
+						memcpy(out_table->symbols[out_table->length - 1].name, section.start, section.length);
+						out_table->symbols[out_table->length - 1].name[section.length] = ':';
+						memcpy(&out_table->symbols[out_table->length - 1].name[section.length + 1], word.start, word.length);
+					} else {
+						tmp_length = word.length;
+						out_table->symbols[out_table->length - 1].name = malloc(tmp_length + 1);
+						if (out_table->symbols[out_table->length - 1].name == NULL || word.start == NULL) {
+							printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
+							return 1;
+						}
+						out_table->symbols[out_table->length - 1].name[tmp_length] = '\0';
+						memcpy(out_table->symbols[out_table->length - 1].name, word.start, tmp_length);
+					}
+					if (out_table->symbols[out_table->length - 1].name == NULL) {
+						printf("Internal error (%llu:%llu)\n", line + 1, column + 1);
+						return 1;
+					}
+
+					out_table->hashes[out_table->length - 1] = koml_internal_hash(out_table->symbols[out_table->length - 1].name, tmp_length);
+
+					word.start = NULL;
+					word.length = 0;
+					word.hash = 0;
+					state = KOML_PARSER_STATE_ARRAY_VALUE;
+				}
+				continue;
+			case KOML_PARSER_STATE_ARRAY_VALUE:
+				if (is_whitespace(c)) {
+					continue;
+				}
+
+				if (isalnum(c) && word.start == NULL) {
+					word.start = &buffer[i];
+					word.length = 0;
+					word.hash = 0;
+				}
+
+				if (c == ',') {
+					koml_array_alloc_new(&out_table->symbols[out_table->length - 1].data.array);
+					--word.length;
+				}
+
+				++word.length;
+				switch (out_table->symbols[out_table->length - 1].data.array.type) {
+					case KOML_TYPE_INT:
+						if (c == ',') {
+							int value = wtoi(word.start, word.length, 10);
+							out_table->symbols[out_table->length - 1].data.array.elements.i32[out_table->symbols[out_table->length - 1].data.array.length - 1] = value;
+
+							word.start = NULL;
+							word.length = 0;
+							word.hash = 0;
+						}
+						continue;
+					case KOML_TYPE_FLOAT:
+						if (c == ',') {
+							continue;
+						}
+						break;
+					case KOML_TYPE_STRING:
+						if (c == ',') {
+							continue;
+						}
+						break;
+					case KOML_TYPE_BOOLEAN:
+						if (c == ',') {
+							continue;
+						}
+						break;
+					case KOML_TYPE_ARRAY:
+						printf("Arrays of arrays are not supported\n");
+						abort();
+				}
+
 				continue;
 			case 0:
 			default:
@@ -555,33 +750,38 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 		}
 
 		if (c == '[') {
-			status = 1;
+			state = KOML_PARSER_STATE_SECTION_WAIT;
 		}
 
 		if (c == 'i') {
 			koml_table_alloc_new(out_table);
 			out_table->symbols[out_table->length - 1].stride = 4;
 			out_table->symbols[out_table->length - 1].type = KOML_TYPE_INT;
-			status = 3;
+			state = KOML_PARSER_STATE_INTEGER_WAIT;
 		}
-
 		if (c == 'f') {
 			koml_table_alloc_new(out_table);
 			out_table->symbols[out_table->length - 1].stride = 4;
 			out_table->symbols[out_table->length - 1].type = KOML_TYPE_FLOAT;
-			status = 6;
+			state = KOML_PARSER_STATE_FLOAT_WAIT;
 		}
 		if (c == 's') {
 			koml_table_alloc_new(out_table);
 			out_table->symbols[out_table->length - 1].stride = 0;
 			out_table->symbols[out_table->length - 1].type = KOML_TYPE_STRING;
-			status = 9;
+			state = KOML_PARSER_STATE_STRING_WAIT;
 		}
 		if (c == 'b') {
 			koml_table_alloc_new(out_table);
 			out_table->symbols[out_table->length - 1].stride = 1;
 			out_table->symbols[out_table->length - 1].type = KOML_TYPE_BOOLEAN;
-			status = 12;
+			state = KOML_PARSER_STATE_BOOLEAN_WAIT;
+		}
+		if (c == 'a') {
+			koml_table_alloc_new(out_table);
+			out_table->symbols[out_table->length - 1].stride = 0;
+			out_table->symbols[out_table->length - 1].type = KOML_TYPE_ARRAY;
+			state = KOML_PARSER_STATE_ARRAY_TYPE_WAIT;
 		}
 	}
 
