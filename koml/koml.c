@@ -735,7 +735,11 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 						break;
 					case KOML_TYPE_ARRAY:
 						printf("Arrays of arrays are not supported\n");
-						abort();
+						return 6;
+					case KOML_TYPE_UNKNOWN:
+					default:
+						printf("Unknown type\n");
+						return 7;
 				}
 
 				continue;
