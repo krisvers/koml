@@ -33,57 +33,11 @@ int main(int argc, char ** argv) {
 	koml_table_t ktable;
 	int ret = koml_table_load(&ktable, buffer, length);
 	if (ret != 0) {
-		printf("Failed to load table %i\n", ret);
 		free(buffer);
-		return 3;
+		return ret;
 	}
 
 	free(buffer);
-
-	koml_symbol_t * aptr = koml_table_symbol(&ktable, "section:a");
-	if (aptr == NULL) {
-		printf("Failed to load symbol \"section:a\"\n");
-		return 4;
-	}
-	koml_symbol_t * cptr = koml_table_symbol(&ktable, "section.sub:c");
-	if (cptr == NULL) {
-		printf("Failed to load symbol \"section.sub:c\"\n");
-		return 5;
-	}
-	koml_symbol_t * fptr = koml_table_symbol(&ktable, "section:f");
-	if (fptr == NULL) {
-		printf("Failed to load symbol \"section:f\"\n");
-		return 6;
-	}
-	koml_symbol_t * sptr = koml_table_symbol(&ktable, "section:s");
-	if (sptr == NULL) {
-		printf("Failed to load symbol \"section:s\"\n");
-		return 7;
-	}
-	koml_symbol_t * bptr = koml_table_symbol(&ktable, "section.sub:b");
-	if (bptr == NULL) {
-		printf("Failed to load symbol \"section.sub:b\"\n");
-		return 8;
-	}
-	koml_symbol_t * testptr = koml_table_symbol(&ktable, "test");
-	if (testptr == NULL) {
-		printf("Failed to load symbol \"section.sub:b\"\n");
-		return 8;
-	}
-
-	int a = aptr->data.i32;
-	int c = cptr->data.i32;
-	float f = fptr->data.f32;
-	char * str = sptr->data.string;
-	unsigned char b = bptr->data.boolean;
-	int test = testptr->data.i32;
-
-	(void) a;
-	(void) c;
-	(void) f;
-	(void) str;
-	(void) b;
-	(void) test;
 
 	printf("table: ");
 	koml_table_print(&ktable);

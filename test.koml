@@ -1,11 +1,11 @@
-itest=4;
-aiarray=1,2,3,4;
+as string_array = "hello, world!", "s";
+i test = 420;
 
 [section]
-ia=2;
-ff=6.9;
-ss="hello,world!";
+i a = 2;
+f f = 6.9;
+s s = "hello, world!";
 
 [section.sub]
-ic=9;
-bb=true;
+i c = 9;
+ab b = true, true;
