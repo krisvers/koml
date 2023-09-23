@@ -42,7 +42,7 @@ static int koml_table_alloc_new(koml_table_t * table) {
 static int koml_array_alloc_new(koml_array_t * array) {
 	++array->length;
 	if (array->strides == NULL) {
-			array->strides = malloc(array->length * sizeof(unsigned long long int));
+		array->strides = malloc(array->length * sizeof(unsigned long long int));
 	} else {
 		array->strides = realloc(array->strides, array->length * sizeof(unsigned long long int));
 	}
@@ -156,7 +156,37 @@ static char * koml_type_strings[] = {
 	"float",
 	"string",
 	"boolean",
+	"array",
 };
+
+void koml_array_print(koml_array_t * array) {
+	printf("(%s) [ ", koml_type_strings[array->type]);
+	for (unsigned long long int i = 0; i < array->length; ++i) {
+		switch (array->type) {
+			case KOML_TYPE_INT:
+				printf("%i", array->elements.i32[i]);
+				break;
+			case KOML_TYPE_FLOAT:
+				printf("%f", array->elements.f32[i]);
+				break;
+			case KOML_TYPE_STRING:
+				printf("%s", array->elements.string[i]);
+				break;
+			case KOML_TYPE_BOOLEAN:
+				printf("%s", (array->elements.boolean[i]) ? "true" : "false");
+				break;
+			case KOML_TYPE_UNKNOWN:
+			default:
+				printf("???");
+				break;
+		}
+
+		if (i < array->length - 1) {
+			printf(", ");
+		}
+	}
+	printf(" ]");
+}
 
 void koml_symbol_print(koml_symbol_t * symbol) {
 	printf("%s (%s): ", symbol->name, koml_type_strings[symbol->type]);
@@ -172,6 +202,9 @@ void koml_symbol_print(koml_symbol_t * symbol) {
 			break;
 		case KOML_TYPE_BOOLEAN:
 			printf("%s", (symbol->data.boolean) ? "true" : "false");
+			break;
+		case KOML_TYPE_ARRAY:
+			koml_array_print(&symbol->data.array);
 			break;
 		case KOML_TYPE_UNKNOWN:
 		default:
@@ -701,12 +734,12 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					word.hash = 0;
 				}
 
-				if (c == ',') {
+				if (c == ',' || c == ';') {
 					koml_array_alloc_new(&out_table->symbols[out_table->length - 1].data.array);
-					--word.length;
+				} else {
+					++word.length;
 				}
 
-				++word.length;
 				switch (out_table->symbols[out_table->length - 1].data.array.type) {
 					case KOML_TYPE_INT:
 						if (c == ',') {
@@ -717,22 +750,119 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 							word.length = 0;
 							word.hash = 0;
 						}
+						if (c == ';') {
+							int value = wtoi(word.start, word.length, 10);
+							out_table->symbols[out_table->length - 1].data.array.elements.i32[out_table->symbols[out_table->length - 1].data.array.length - 1] = value;
+
+							word.start = NULL;
+							word.length = 0;
+							word.hash = 0;
+
+							state = KOML_PARSER_STATE_NONE;
+						}
 						continue;
 					case KOML_TYPE_FLOAT:
 						if (c == ',') {
-							continue;
+							float value = wtof(word.start, word.length);
+							out_table->symbols[out_table->length - 1].data.array.elements.f32[out_table->symbols[out_table->length - 1].data.array.length - 1] = value;
+
+							word.start = NULL;
+							word.length = 0;
+							word.hash = 0;
 						}
-						break;
+						if (c == ';') {
+							float value = wtof(word.start, word.length);
+							out_table->symbols[out_table->length - 1].data.array.elements.f32[out_table->symbols[out_table->length - 1].data.array.length - 1] = value;
+
+							word.start = NULL;
+							word.length = 0;
+							word.hash = 0;
+
+							state = KOML_PARSER_STATE_NONE;
+						}
+						continue;
 					case KOML_TYPE_STRING:
-						if (c == ',') {
+						if (is_whitespace(c)) {
 							continue;
 						}
-						break;
+
+						if (c == '"') {
+							++i;
+							c = buffer[i];
+							word.start = &buffer[i];
+							word.length = 0;
+							while (c != '"') {
+								++i;
+								++word.length;
+								if (i >= buffer_length) {
+									printf("String literal never ended (%llu:%llu)\n", line + 1, column + 1);
+									return 2;
+								}
+								c = buffer[i];
+							}
+
+							//out_table->symbols[out_table->length - 1].data.array.strides[out_table->symbols[out_table->length - 1].data.array.length - 1] = word.length;
+							out_table->symbols[out_table->length - 1].data.array.elements.string[out_table->symbols[out_table->length - 1].data.array.length - 1] = malloc(word.length + 1);
+							if (out_table->symbols[out_table->length - 1].data.array.elements.string[out_table->symbols[out_table->length - 1].data.array.length - 1] == NULL) {
+								printf("Failed to allocate string buffer (%llu:%llu)\n", line + 1, column + 1);
+								return 3;
+							}
+
+							printf("%s\n", out_table->symbols[out_table->length - 1].data.array.elements.string[out_table->symbols[out_table->length - 1].data.array.length - 1]);
+
+							out_table->symbols[out_table->length - 1].data.array.elements.string[out_table->symbols[out_table->length - 1].data.array.length - 1][word.length] = '\0';
+							memcpy(out_table->symbols[out_table->length - 1].data.array.elements.string[out_table->symbols[out_table->length - 1].data.array.length - 1], word.start, word.length);
+						}
+
+						if (c == ',') {
+							word.start = NULL;
+							word.length = 0;
+							word.hash = 0;
+							continue;
+						}
+
+						if (c == ';') {
+							word.start = NULL;
+							word.length = 0;
+							word.hash = 0;
+							state = KOML_PARSER_STATE_NONE;
+							continue;
+						}
+
+						if (word.start != NULL) {
+							++word.length;
+						}
+						continue;
 					case KOML_TYPE_BOOLEAN:
 						if (c == ',') {
-							continue;
+							if (!is_boolean(word.start, word.length)) {
+								printf("Invalid boolean value (%llu:%llu)\n", line + 1, column + 1);
+								return 5;
+							}
+
+							unsigned char value = wtotf(word.start, word.length);
+							out_table->symbols[out_table->length - 1].data.array.elements.boolean[out_table->symbols[out_table->length - 1].data.array.length - 1] = value;
+
+							word.start = NULL;
+							word.length = 0;
+							word.hash = 0;
 						}
-						break;
+						if (c == ';') {
+							if (!is_boolean(word.start, word.length)) {
+								printf("Invalid boolean value (%llu:%llu)\n", line + 1, column + 1);
+								return 5;
+							}
+
+							unsigned char value = wtotf(word.start, word.length);
+							out_table->symbols[out_table->length - 1].data.array.elements.boolean[out_table->symbols[out_table->length - 1].data.array.length - 1] = value;
+
+							word.start = NULL;
+							word.length = 0;
+							word.hash = 0;
+
+							state = KOML_PARSER_STATE_NONE;
+						}
+						continue;
 					case KOML_TYPE_ARRAY:
 						printf("Arrays of arrays are not supported\n");
 						return 6;
