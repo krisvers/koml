@@ -46,6 +46,7 @@ void koml_symbol_print(koml_symbol_t * symbol);
 void koml_table_print(koml_table_t * table);
 int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long int buffer_length);
 koml_symbol_t * koml_table_symbol(koml_table_t * table, char * name);
+koml_symbol_t * koml_table_symbol_word(koml_table_t * table, char * name, unsigned long long int name_length);
 int koml_table_destroy(koml_table_t * table);
 
 #endif

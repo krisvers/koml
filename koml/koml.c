@@ -82,6 +82,47 @@ static int koml_array_alloc_new(koml_array_t * array) {
 	return 0;
 }
 
+static int koml_array_alloc_new_amount(koml_array_t * array, unsigned long long int amount) {
+	array->length = amount;
+	if (array->strides == NULL) {
+		array->strides = malloc(array->length * sizeof(unsigned long long int));
+	} else {
+		array->strides = realloc(array->strides, array->length * sizeof(unsigned long long int));
+	}
+
+	if (array->strides == NULL) {
+		return 1;
+	}
+
+	unsigned long long int stride = 0;
+	switch (array->type) {
+		case KOML_TYPE_INT:
+		case KOML_TYPE_FLOAT:
+			stride = 4;
+			break;
+		case KOML_TYPE_STRING:
+			stride = sizeof(char *);
+			break;
+		case KOML_TYPE_BOOLEAN:
+			stride = 1;
+			break;
+		default:
+			return 3;
+	}
+
+	if (array->elements.voidptr == NULL) {
+		array->elements.voidptr = malloc(array->length * stride);
+	} else {
+		array->elements.voidptr = realloc(array->elements.voidptr, array->length * stride);
+	}
+
+	if (array->elements.voidptr == NULL) {
+		return 2;
+	}
+
+	return 0;
+}
+
 static char is_whitespace(char c) {
 	if (c == '\t' || c == '\r' || c == '\n' || c == ' ') {
 		return 1;
@@ -128,7 +169,7 @@ static unsigned char is_boolean(char * start, unsigned long long int length) {
 }
 
 static unsigned char is_num(char c) {
-	return (isalnum(c) && !isalpha(c));
+	return ((isalnum(c) && !isalpha(c)) || c == '-');
 }
 
 static unsigned char wtotf(char * start, unsigned long long int length) {
@@ -328,6 +369,9 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 				}
 				c = buffer[i];
 			}
+
+			++i;
+			c = buffer[i];
 		}
 
 		if (c == '\n') {
@@ -432,6 +476,57 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 				continue;
 			case KOML_PARSER_STATE_INTEGER_VALUE:
 				if (is_whitespace(c)) {
+					continue;
+				}
+
+				if (c == '@') {
+					koml_symbol_t * ptr;
+					++i;
+					c = buffer[i];
+					word.start = &buffer[i];
+					word.length = 0;
+					while (c != ';') {
+						++i;
+						++word.length;
+						if (i >= buffer_length) {
+							printf("Variable reference never ended (line %llu: column %llu)\n  | ", line + 1, column + 1);
+							koml_printline(buffer, line, column);
+							printf("\n  | ");
+							koml_printcursor(column);
+							printf("\n");
+							return 16;
+						}
+						c = buffer[i];
+					}
+					ptr = koml_table_symbol_word(out_table, word.start, word.length);
+					if (ptr == NULL) {
+						printf("Variable reference to undefined symbol (line %llu: column %llu)\n  | ", line + 1, column + 1);
+						koml_printline(buffer, line, column);
+						printf("\n  | ");
+						koml_printcursor(column);
+						printf("\n");
+						return 17;
+					}
+
+					if (ptr->type != KOML_TYPE_INT && ptr->type != KOML_TYPE_FLOAT) {
+						printf("Invalid type of variable reference (line %llu: column %llu)\n  | ", line + 1, column + 1);
+						koml_printline(buffer, line, column);
+						printf("\n  | ");
+						koml_printcursor(column);
+						printf("\n");
+						return 18;
+					}
+
+					if (ptr->type == KOML_TYPE_FLOAT) {
+						out_table->symbols[out_table->length - 1].data.i32 = ptr->data.f32;
+					} else {
+						out_table->symbols[out_table->length - 1].data.i32 = ptr->data.i32;
+					}
+
+					word.start = NULL;
+					word.length = 0;
+					word.hash = 0;
+					state = KOML_PARSER_STATE_NONE;
 					continue;
 				}
 
@@ -545,6 +640,57 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 				continue;
 			case KOML_PARSER_STATE_FLOAT_VALUE:
 				if (is_whitespace(c)) {
+					continue;
+				}
+
+				if (c == '@') {
+					koml_symbol_t * ptr;
+					++i;
+					c = buffer[i];
+					word.start = &buffer[i];
+					word.length = 0;
+					while (c != ';') {
+						++i;
+						++word.length;
+						if (i >= buffer_length) {
+							printf("Variable reference never ended (line %llu: column %llu)\n  | ", line + 1, column + 1);
+							koml_printline(buffer, line, column);
+							printf("\n  | ");
+							koml_printcursor(column);
+							printf("\n");
+							return 16;
+						}
+						c = buffer[i];
+					}
+					ptr = koml_table_symbol_word(out_table, word.start, word.length);
+					if (ptr == NULL) {
+						printf("Variable reference to undefined symbol (line %llu: column %llu)\n  | ", line + 1, column + 1);
+						koml_printline(buffer, line, column);
+						printf("\n  | ");
+						koml_printcursor(column);
+						printf("\n");
+						return 17;
+					}
+
+					if (ptr->type != KOML_TYPE_INT && ptr->type != KOML_TYPE_FLOAT) {
+						printf("Invalid type of variable reference (line %llu: column %llu)\n  | ", line + 1, column + 1);
+						koml_printline(buffer, line, column);
+						printf("\n  | ");
+						koml_printcursor(column);
+						printf("\n");
+						return 18;
+					}
+
+					if (ptr->type == KOML_TYPE_FLOAT) {
+						out_table->symbols[out_table->length - 1].data.f32 = ptr->data.f32;
+					} else {
+						out_table->symbols[out_table->length - 1].data.f32 = ptr->data.i32;
+					}
+
+					word.start = NULL;
+					word.length = 0;
+					word.hash = 0;
+					state = KOML_PARSER_STATE_NONE;
 					continue;
 				}
 
@@ -699,6 +845,63 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					word.hash = 0;
 					state = KOML_PARSER_STATE_NONE;
 					continue;
+				} else if (c == '@') {
+					koml_symbol_t * ptr;
+					++i;
+					c = buffer[i];
+					word.start = &buffer[i];
+					word.length = 0;
+					while (c != ';') {
+						++i;
+						++word.length;
+						if (i >= buffer_length) {
+							printf("Variable reference never ended (line %llu: column %llu)\n  | ", line + 1, column + 1);
+							koml_printline(buffer, line, column);
+							printf("\n  | ");
+							koml_printcursor(column);
+							printf("\n");
+							return 16;
+						}
+						c = buffer[i];
+					}
+
+					ptr = koml_table_symbol_word(out_table, word.start, word.length);
+					if (ptr == NULL) {
+						printf("Variable reference to undefined symbol (line %llu: column %llu)\n  | ", line + 1, column + 1);
+						koml_printline(buffer, line, column);
+						printf("\n  | ");
+						koml_printcursor(column);
+						printf("\n");
+						return 17;
+					}
+
+					if (ptr->type != KOML_TYPE_STRING) {
+						printf("Invalid type of variable reference (line %llu: column %llu)\n  | ", line + 1, column + 1);
+						koml_printline(buffer, line, column);
+						printf("\n  | ");
+						koml_printcursor(column);
+						printf("\n");
+						return 18;
+					}
+
+					out_table->symbols[out_table->length - 1].data.string = malloc(ptr->stride + 1);
+					if (out_table->symbols[out_table->length - 1].data.string == NULL) {
+						printf("Internal error (line %llu: column %llu)\n  | ", line + 1, column + 1);
+						koml_printline(buffer, line, column);
+						printf("\n  | ");
+						koml_printcursor(column);
+						printf("\n");
+						return 1;
+					}
+
+					out_table->symbols[out_table->length - 1].data.string[ptr->stride] = '\0';
+					memcpy(out_table->symbols[out_table->length - 1].data.string, ptr->data.string, ptr->stride);
+
+					word.start = NULL;
+					word.length = 0;
+					word.hash = 0;
+					state = KOML_PARSER_STATE_NONE;
+					continue;
 				} else {
 					printf("Invalid string literal (line %llu: column %llu)\n  | ", line + 1, column + 1);
 					koml_printline(buffer, line, column);
@@ -788,6 +991,53 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 				continue;
 			case KOML_PARSER_STATE_BOOLEAN_VALUE:
 				if (is_whitespace(c)) {
+					continue;
+				}
+
+				if (c == '@') {
+					koml_symbol_t * ptr;
+					++i;
+					c = buffer[i];
+					word.start = &buffer[i];
+					word.length = 0;
+					while (c != ';') {
+						++i;
+						++word.length;
+						if (i >= buffer_length) {
+							printf("Variable reference never ended (line %llu: column %llu)\n  | ", line + 1, column + 1);
+							koml_printline(buffer, line, column);
+							printf("\n  | ");
+							koml_printcursor(column);
+							printf("\n");
+							return 16;
+						}
+						c = buffer[i];
+					}
+					ptr = koml_table_symbol_word(out_table, word.start, word.length);
+					if (ptr == NULL) {
+						printf("Variable reference to undefined symbol (line %llu: column %llu)\n  | ", line + 1, column + 1);
+						koml_printline(buffer, line, column);
+						printf("\n  | ");
+						koml_printcursor(column);
+						printf("\n");
+						return 17;
+					}
+
+					if (ptr->type != KOML_TYPE_BOOLEAN) {
+						printf("Invalid type of variable reference (line %llu: column %llu)\n  | ", line + 1, column + 1);
+						koml_printline(buffer, line, column);
+						printf("\n  | ");
+						koml_printcursor(column);
+						printf("\n");
+						return 18;
+					}
+
+					out_table->symbols[out_table->length - 1].data.boolean = ptr->data.boolean;
+
+					word.start = NULL;
+					word.length = 0;
+					word.hash = 0;
+					state = KOML_PARSER_STATE_NONE;
 					continue;
 				}
 
@@ -929,6 +1179,146 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					continue;
 				}
 
+				if (c == '@') {
+					koml_symbol_t * ptr;
+					++i;
+					c = buffer[i];
+					word.start = &buffer[i];
+					word.length = 0;
+					while (c != ';') {
+						++i;
+						++word.length;
+						if (i >= buffer_length) {
+							printf("Array reference never ended (line %llu: column %llu)\n  | ", line + 1, column + 1);
+							koml_printline(buffer, line, column);
+							printf("\n  | ");
+							koml_printcursor(column);
+							printf("\n");
+							return 16;
+						}
+						c = buffer[i];
+					}
+					ptr = koml_table_symbol_word(out_table, word.start, word.length);
+					if (ptr == NULL) {
+						printf("Array reference to undefined symbol (line %llu: column %llu)\n  | ", line + 1, column + 1);
+						koml_printline(buffer, line, column);
+						printf("\n  | ");
+						koml_printcursor(column);
+						printf("\n");
+						return 17;
+					}
+
+					if (ptr->type != KOML_TYPE_ARRAY) {
+						printf("Invalid type of array reference (line %llu: column %llu)\n  | ", line + 1, column + 1);
+						koml_printline(buffer, line, column);
+						printf("\n  | ");
+						koml_printcursor(column);
+						printf("\n");
+						return 18;
+					}
+
+					switch (out_table->symbols[out_table->length - 1].data.array.type) {
+						case KOML_TYPE_INT:
+							if (ptr->data.array.type != KOML_TYPE_INT && ptr->data.array.type != KOML_TYPE_FLOAT) {
+								printf("Invalid type of array reference (line %llu: column %llu)\n  | ", line + 1, column + 1);
+								koml_printline(buffer, line, column);
+								printf("\n  | ");
+								koml_printcursor(column);
+								printf("\n");
+								return 18;
+							}
+
+							if (ptr->data.array.type == KOML_TYPE_INT) {
+								koml_array_alloc_new_amount(&out_table->symbols[out_table->length - 1].data.array, ptr->data.array.length);
+								memcpy(out_table->symbols[out_table->length - 1].data.array.elements.i32, ptr->data.array.elements.i32, ptr->data.array.length * 4);
+								memcpy(out_table->symbols[out_table->length - 1].data.array.strides, ptr->data.array.strides, ptr->data.array.length * 4);
+							} else {
+								koml_array_alloc_new_amount(&out_table->symbols[out_table->length - 1].data.array, ptr->data.array.length);
+								for (unsigned long long int i = 0; i < ptr->data.array.length; ++i) {
+									out_table->symbols[out_table->length - 1].data.array.elements.i32[i] = ptr->data.array.elements.f32[i];
+								}
+							}
+							break;
+						case KOML_TYPE_FLOAT:
+							if (ptr->data.array.type != KOML_TYPE_INT && ptr->data.array.type != KOML_TYPE_FLOAT) {
+								printf("Invalid type of array reference (line %llu: column %llu)\n  | ", line + 1, column + 1);
+								koml_printline(buffer, line, column);
+								printf("\n  | ");
+								koml_printcursor(column);
+								printf("\n");
+								return 18;
+							}
+
+							if (ptr->data.array.type == KOML_TYPE_FLOAT) {
+								koml_array_alloc_new_amount(&out_table->symbols[out_table->length - 1].data.array, ptr->data.array.length);
+								memcpy(out_table->symbols[out_table->length - 1].data.array.elements.f32, ptr->data.array.elements.f32, ptr->data.array.length * 4);
+								memcpy(out_table->symbols[out_table->length - 1].data.array.strides, ptr->data.array.strides, ptr->data.array.length * 4);
+							} else {
+								koml_array_alloc_new_amount(&out_table->symbols[out_table->length - 1].data.array, ptr->data.array.length);
+								for (unsigned long long int i = 0; i < ptr->data.array.length; ++i) {
+									out_table->symbols[out_table->length - 1].data.array.elements.f32[i] = ptr->data.array.elements.i32[i];
+								}
+							}
+							break;
+						case KOML_TYPE_STRING:
+							if (ptr->data.array.type != KOML_TYPE_STRING) {
+								printf("Invalid type of array reference (line %llu: column %llu)\n  | ", line + 1, column + 1);
+								koml_printline(buffer, line, column);
+								printf("\n  | ");
+								koml_printcursor(column);
+								printf("\n");
+								return 18;
+							}
+
+							koml_array_alloc_new_amount(&out_table->symbols[out_table->length - 1].data.array, ptr->data.array.length);
+							memcpy(out_table->symbols[out_table->length - 1].data.array.strides, ptr->data.array.strides, ptr->data.array.length * 4);
+							for (unsigned long long int i = 0; i < ptr->data.array.length; ++i) {
+								out_table->symbols[out_table->length - 1].data.array.elements.string[i] = malloc(ptr->data.array.strides[i] + 1);
+								if (out_table->symbols[out_table->length - 1].data.array.elements.string[i] == NULL) {
+									printf("Internal error (line %llu: column %llu)\n  | ", line + 1, column + 1);
+									koml_printline(buffer, line, column);
+									printf("\n  | ");
+									koml_printcursor(column);
+									printf("\n");
+									return 1;
+								}
+
+								memcpy(out_table->symbols[out_table->length - 1].data.array.elements.string[i], ptr->data.array.elements.string[i], ptr->data.array.strides[i]);
+								out_table->symbols[out_table->length - 1].data.array.elements.string[i][ptr->data.array.strides[i]] = '\0';
+							}
+							
+							break;
+						case KOML_TYPE_BOOLEAN:
+							if (ptr->data.array.type != KOML_TYPE_BOOLEAN) {
+								printf("Invalid type of array reference (line %llu: column %llu)\n  | ", line + 1, column + 1);
+								koml_printline(buffer, line, column);
+								printf("\n  | ");
+								koml_printcursor(column);
+								printf("\n");
+								return 18;
+							}
+
+							koml_array_alloc_new_amount(&out_table->symbols[out_table->length - 1].data.array, ptr->data.array.length);
+							memcpy(out_table->symbols[out_table->length - 1].data.array.elements.boolean, ptr->data.array.elements.boolean, ptr->data.array.length);
+							memcpy(out_table->symbols[out_table->length - 1].data.array.strides, ptr->data.array.strides, ptr->data.array.length * 4);
+							
+							break;
+						default:
+							printf("Invalid array reference type (line %llu: column %llu)\n  | ", line + 1, column + 1);
+							koml_printline(buffer, line, column);
+							printf("\n  | ");
+							koml_printcursor(column);
+							printf("\n");
+							return 19;
+					}
+
+					word.start = NULL;
+					word.length = 0;
+					word.hash = 0;
+					state = KOML_PARSER_STATE_NONE;
+					continue;
+				}
+
 				if (isalnum(c) && word.start == NULL) {
 					word.start = &buffer[i];
 					word.length = 0;
@@ -951,15 +1341,6 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 
 				switch (out_table->symbols[out_table->length - 1].data.array.type) {
 					case KOML_TYPE_INT:
-						if (!is_num(c)) {
-							printf("Invalid integer value (line % llu: column % llu)\n | ", line + 1, column + 1);
-							koml_printline(buffer, line, column);
-							printf("\n  | ");
-							koml_printcursor(column);
-							printf("\n");
-							return 11;
-						}
-
 						if (c == ',') {
 							int value = wtoi(word.start, word.length, 10);
 							out_table->symbols[out_table->length - 1].data.array.elements.i32[out_table->symbols[out_table->length - 1].data.array.length - 1] = value;
@@ -967,8 +1348,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 							word.start = NULL;
 							word.length = 0;
 							word.hash = 0;
-						}
-						if (c == ';') {
+						} else if (c == ';') {
 							int value = wtoi(word.start, word.length, 10);
 							out_table->symbols[out_table->length - 1].data.array.elements.i32[out_table->symbols[out_table->length - 1].data.array.length - 1] = value;
 
@@ -977,10 +1357,33 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 							word.hash = 0;
 
 							state = KOML_PARSER_STATE_NONE;
+						} else if (!is_num(c)) {
+							printf("Invalid integer value (line % llu: column % llu)\n  | ", line + 1, column + 1);
+							koml_printline(buffer, line, column);
+							printf("\n  | ");
+							koml_printcursor(column);
+							printf("\n");
+							return 11;
 						}
 						continue;
 					case KOML_TYPE_FLOAT:
-						if (!is_num(c) && c != '.') {
+						if (c == ',') {
+							float value = wtof(word.start, word.length);
+							out_table->symbols[out_table->length - 1].data.array.elements.f32[out_table->symbols[out_table->length - 1].data.array.length - 1] = value;
+
+							word.start = NULL;
+							word.length = 0;
+							word.hash = 0;
+						} else if (c == ';') {
+							float value = wtof(word.start, word.length);
+							out_table->symbols[out_table->length - 1].data.array.elements.f32[out_table->symbols[out_table->length - 1].data.array.length - 1] = value;
+
+							word.start = NULL;
+							word.length = 0;
+							word.hash = 0;
+
+							state = KOML_PARSER_STATE_NONE;
+						} else if (!is_num(c) && c != '.') {
 							printf("Invalid float value (line %llu: column %llu)\n  | ", line + 1, column + 1);
 							koml_printline(buffer, line, column);
 							printf("\n  | ");
@@ -989,24 +1392,6 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 							return 10;
 						}
 
-						if (c == ',') {
-							float value = wtof(word.start, word.length);
-							out_table->symbols[out_table->length - 1].data.array.elements.f32[out_table->symbols[out_table->length - 1].data.array.length - 1] = value;
-
-							word.start = NULL;
-							word.length = 0;
-							word.hash = 0;
-						}
-						if (c == ';') {
-							float value = wtof(word.start, word.length);
-							out_table->symbols[out_table->length - 1].data.array.elements.f32[out_table->symbols[out_table->length - 1].data.array.length - 1] = value;
-
-							word.start = NULL;
-							word.length = 0;
-							word.hash = 0;
-
-							state = KOML_PARSER_STATE_NONE;
-						}
 						continue;
 					case KOML_TYPE_STRING:
 						if (is_whitespace(c)) {
@@ -1178,6 +1563,18 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 
 koml_symbol_t * koml_table_symbol(koml_table_t * table, char * name) {
 	unsigned long long int hash = koml_internal_hash(name, strlen(name));
+
+	for (unsigned long long int i = 0; i < table->length; ++i) {
+		if (table->hashes[i] == hash) {
+			return &table->symbols[i];
+		}
+	}
+
+	return NULL;
+}
+
+koml_symbol_t * koml_table_symbol_word(koml_table_t * table, char * name, unsigned long long int name_length) {
+	unsigned long long int hash = koml_internal_hash(name, name_length);
 
 	for (unsigned long long int i = 0; i < table->length; ++i) {
 		if (table->hashes[i] == hash) {

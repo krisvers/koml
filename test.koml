@@ -1,11 +1,32 @@
-as string_array = "hello, world!", "s";
-i test = 420;
+| regular variables |
+i int = 2;
+i int_copy = @int;
 
-[section]
-i a = 2;
-f f = 6.9;
-s s = "hello, world!";
+f float = 420.69;
+f float_copy = @float;
 
-[section.sub]
-i c = 9;
-ab b = true, true;
+s string = "hello, world!";
+s string_copy = @string;
+
+b boolean = true;
+b boolean_copy = @boolean;
+
+	[arrays]
+	ai int = 1, 2, 3, 4, 5, 9, 2999;
+	ai int_copy = @arrays:int;
+
+	af float = 1.1, 2.2, 3.3, 9.9, 23.2;
+	af float_copy = @arrays:float;
+
+	as string = "hello", "goodbye", "how are you", "im doing good";
+	as string_copy = @arrays:string;
+
+	ab boolean = 0, 1, t, f, true, false;
+	ab boolean_copy = @arrays:boolean;
+
+		[arrays.cross]
+		ai int = 1, 2, 3, 4, 5, 9, 2999;
+		af int_copy = @arrays:int;
+
+		af float = 1.1, 2.2, 3.3, 9.9, 23.2;
+		ai float_copy = @arrays:float;
