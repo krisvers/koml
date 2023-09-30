@@ -1,7 +1,7 @@
 #ifndef KRISVERS_KOML_H
 #define KRISVERS_KOML_H
 
-typedef enum KOMLType {
+typedef enum koml_type {
 	KOML_TYPE_UNKNOWN = 0,
 	KOML_TYPE_INT = 1,
 	KOML_TYPE_FLOAT = 2,
@@ -10,7 +10,7 @@ typedef enum KOMLType {
 	KOML_TYPE_ARRAY = 5,
 } koml_type_enum;
 
-typedef struct KOMLArray {
+typedef struct koml_array {
 	unsigned long long int length;
 	unsigned long long int * strides;
 	union {
@@ -23,7 +23,7 @@ typedef struct KOMLArray {
 	koml_type_enum type;
 } koml_array_t;
 
-typedef struct KOMLSymbol {
+typedef struct koml_symbol {
 	char * name;
 	unsigned long long int stride;
 	koml_type_enum type;
@@ -36,7 +36,7 @@ typedef struct KOMLSymbol {
 	} data;
 } koml_symbol_t;
 
-typedef struct KOMLTable {
+typedef struct koml_table {
 	koml_symbol_t * symbols;
 	unsigned long long int * hashes;
 	unsigned long long int length;
