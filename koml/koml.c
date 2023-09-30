@@ -518,7 +518,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					}
 
 					if (ptr->type == KOML_TYPE_FLOAT) {
-						out_table->symbols[out_table->length - 1].data.i32 = ptr->data.f32;
+						out_table->symbols[out_table->length - 1].data.i32 = (int) ptr->data.f32;
 					} else {
 						out_table->symbols[out_table->length - 1].data.i32 = ptr->data.i32;
 					}
@@ -684,7 +684,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 					if (ptr->type == KOML_TYPE_FLOAT) {
 						out_table->symbols[out_table->length - 1].data.f32 = ptr->data.f32;
 					} else {
-						out_table->symbols[out_table->length - 1].data.f32 = ptr->data.i32;
+						out_table->symbols[out_table->length - 1].data.f32 =  (float) ptr->data.i32;
 					}
 
 					word.start = NULL;
@@ -1235,7 +1235,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 							} else {
 								koml_array_alloc_new_amount(&out_table->symbols[out_table->length - 1].data.array, ptr->data.array.length);
 								for (unsigned long long int i = 0; i < ptr->data.array.length; ++i) {
-									out_table->symbols[out_table->length - 1].data.array.elements.i32[i] = ptr->data.array.elements.f32[i];
+									out_table->symbols[out_table->length - 1].data.array.elements.i32[i] = (int) ptr->data.array.elements.f32[i];
 								}
 							}
 							break;
@@ -1256,7 +1256,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 							} else {
 								koml_array_alloc_new_amount(&out_table->symbols[out_table->length - 1].data.array, ptr->data.array.length);
 								for (unsigned long long int i = 0; i < ptr->data.array.length; ++i) {
-									out_table->symbols[out_table->length - 1].data.array.elements.f32[i] = ptr->data.array.elements.i32[i];
+									out_table->symbols[out_table->length - 1].data.array.elements.f32[i] = (float) ptr->data.array.elements.i32[i];
 								}
 							}
 							break;
