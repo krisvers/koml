@@ -1358,7 +1358,7 @@ int koml_table_load(koml_table_t * out_table, char * buffer, unsigned long long 
 
 							state = KOML_PARSER_STATE_NONE;
 						} else if (!is_num(c)) {
-							printf("Invalid integer value (line % llu: column % llu)\n  | ", line + 1, column + 1);
+							printf("Invalid integer value (line %llu: column %llu)\n  | ", line + 1, column + 1);
 							koml_printline(buffer, line, column);
 							printf("\n  | ");
 							koml_printcursor(column);
